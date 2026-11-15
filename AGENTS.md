@@ -30,6 +30,7 @@ composer install && composer test   # phpunit (ModuleRegistry)
 - Stay dependency-light: no `astro` dependency in TS; only `slim/slim` in PHP.
 - The `virtual:panel-*` aliases keep resolving until a deliberate 2.0.0.
 - Don't hand-bump `version`; `release.yml` bumps `package.json` and `composer.json` together.
+- Follows the TDS quality standard (`../tds-ops/standards/quality.md`): no AI slop, clean code.
 
 ## Topic files
 
