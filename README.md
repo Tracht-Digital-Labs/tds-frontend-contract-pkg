@@ -10,7 +10,7 @@ Two halves ship from this one repo:
 
 | Half | Package | Consumed by |
 |---|---|---|
-| **Frontend** (TypeScript) | `@tracht-digital-solutions/tds-frontend-contract` (GitHub Packages) | `core-frontend` + every extension's frontend package |
+| **Frontend** (TypeScript) | `@tracht-digital-labs/tds-frontend-contract` (GitHub Packages) | `core-frontend` + every extension's frontend package |
 | **Backend** (PHP) | `tracht-digital-solutions/tds-frontend-contract` (Composer) | `core-frontend-api` + every extension's backend package |
 
 ## Why build-time composition
@@ -28,7 +28,7 @@ from "shared design" to "mountable features".
 An extension exports an `ExtensionManifest` describing what it contributes:
 
 ```ts
-import { defineExtension } from "@tracht-digital-solutions/tds-frontend-contract";
+import { defineExtension } from "@tracht-digital-labs/tds-frontend-contract";
 
 export default defineExtension({
   id: "time-tracker",
@@ -50,15 +50,15 @@ persists per-user layout), `routes`, `settings`, `i18n`.
 The product host composes them in its `astro.config.mjs`:
 
 ```ts
-import { frontendHost } from "@tracht-digital-solutions/tds-frontend-contract/astro";
-import timeTracker from "@tracht-digital-solutions/tds-ext-time-tracker";
+import { frontendHost } from "@tracht-digital-labs/tds-frontend-contract/astro";
+import timeTracker from "@tracht-digital-labs/tds-ext-time-tracker";
 // ...
 export default defineConfig({
   integrations: [
     frontendHost({
       extensions: [timeTracker /*, ...*/],
       // Wrap every extension route in the host shell Layout (head/CSS/nav).
-      layout: "@tracht-digital-solutions/tds-core-frontend/src/layouts/Layout.astro",
+      layout: "@tracht-digital-labs/tds-core-frontend/src/layouts/Layout.astro",
     }),
   ],
 });

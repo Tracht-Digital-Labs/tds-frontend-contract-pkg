@@ -36,7 +36,7 @@ const base = (over: Partial<ExtensionManifest> & Pick<ExtensionManifest, "id">):
 /** A real absolute root: fileURLToPath needs a drive letter on Windows. */
 const ROOT = new URL(pathToFileURL(join(process.cwd(), "product")).href + "/");
 
-const LAYOUT = "@tracht-digital-solutions/tds-core-frontend/src/layouts/Layout.astro";
+const LAYOUT = "@tracht-digital-labs/tds-core-frontend/src/layouts/Layout.astro";
 
 /** A capture of everything the integration did during `astro:config:setup`. */
 function runSetup(host: ReturnType<typeof frontendHost>) {

@@ -4,7 +4,7 @@ The **SDK for the base-frontend + extensions split**. It defines *how* a base fr
 composes extensions and contains no features: no routes, no UI, no database. Two halves in
 one repo, mirror images on purpose:
 
-- **TypeScript** (`src/`, npm `@tracht-digital-solutions/tds-frontend-contract`):
+- **TypeScript** (`src/`, npm `@tracht-digital-labs/tds-frontend-contract`):
   `ExtensionManifest`, `composeExtensions`, and the `frontendHost` Astro integration (`./astro`).
 - **PHP** (`php/src/`, Composer `tracht-digital-solutions/tds-frontend-contract`): the `Module`
   interface, `ModuleRegistry` and the core-service interfaces modules consume.

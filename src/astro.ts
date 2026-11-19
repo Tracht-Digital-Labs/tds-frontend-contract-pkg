@@ -89,7 +89,7 @@ export interface FrontendHostOptions {
    * `title` prop + a default slot). When set, every extension route is injected
    * WRAPPED in this Layout so it renders the full panel chrome (head/CSS/nav) —
    * not a bare `<section>` fragment. Products pass the host's Layout, e.g.
-   * `"@tracht-digital-solutions/tds-core-frontend/src/layouts/Layout.astro"`.
+   * `"@tracht-digital-labs/tds-core-frontend/src/layouts/Layout.astro"`.
    *
    * Omitted → routes are injected raw (legacy behaviour; the page must supply
    * its own `<html>`). Base pages injected by `coreFrontendBase()` always wrap
