@@ -9,16 +9,7 @@
  * tested (see `__tests__/registry.test.ts`).
  */
 
-import type {
-  ComposedRegistry,
-  ExtensionManifest,
-  I18nStrings,
-  NavEntry,
-  PermissionDef,
-  RouteDef,
-  SettingsPanel,
-  WidgetManifest,
-} from "./types.js";
+import type { ComposedRegistry, ExtensionManifest, I18nStrings } from "./types.js";
 
 const KEBAB = /^[a-z][a-z0-9]*(-[a-z0-9]+)*$/;
 
@@ -97,64 +88,53 @@ export function composeExtensions(manifests: ExtensionManifest[]): ComposedRegis
   const order = topoSort(manifests, byId);
   const ordered = order.map((id) => byId.get(id)!);
 
-  const permissions: PermissionDef[] = [];
-  const nav: NavEntry[] = [];
-  const widgets: WidgetManifest[] = [];
-  const settings: SettingsPanel[] = [];
-  const routes: RouteDef[] = [];
   const i18n: I18nStrings = { de: {}, en: {} };
-
-  const claim = (registry: Set<string>, id: string, kind: string, ext: string) => {
-    if (registry.has(id)) {
-      throw new Error(`Conflicting ${kind} id "${id}" (from extension "${ext}")`);
-    }
-    registry.add(id);
-  };
-  const permIds = new Set<string>();
-  const navIds = new Set<string>();
-  const widgetIds = new Set<string>();
-  const settingsIds = new Set<string>();
-  const routePatterns = new Set<string>();
-
   for (const ext of ordered) {
-    for (const p of ext.permissions ?? []) {
-      claim(permIds, p.id, "permission", ext.id);
-      permissions.push(p);
-    }
-    for (const n of ext.nav ?? []) {
-      claim(navIds, n.id, "nav", ext.id);
-      nav.push(n);
-    }
-    for (const w of ext.widgets ?? []) {
-      claim(widgetIds, w.id, "widget", ext.id);
-      widgets.push(w);
-    }
-    for (const s of ext.settings ?? []) {
-      claim(settingsIds, s.id, "settings", ext.id);
-      settings.push(s);
-    }
-    for (const r of ext.routes ?? []) {
-      claim(routePatterns, r.pattern, "route", ext.id);
-      routes.push(r);
-    }
-    if (ext.i18n) {
-      Object.assign(i18n.de, ext.i18n.de);
-      Object.assign(i18n.en, ext.i18n.en);
-    }
+    Object.assign(i18n.de, ext.i18n?.de);
+    Object.assign(i18n.en, ext.i18n?.en);
   }
-
-  const byOrder = <T extends { order?: number }>(a: T, b: T) =>
-    (a.order ?? 100) - (b.order ?? 100);
 
   return {
     order,
-    permissions,
-    nav: stableSort(nav, byOrder),
-    widgets: stableSort(widgets, byOrder),
-    settings: stableSort(settings, byOrder),
-    routes,
+    permissions: collect(ordered, "permission", (ext) => ext.permissions, (p) => p.id),
+    nav: byOrder(collect(ordered, "nav", (ext) => ext.nav, (n) => n.id)),
+    widgets: byOrder(collect(ordered, "widget", (ext) => ext.widgets, (w) => w.id)),
+    settings: byOrder(collect(ordered, "settings", (ext) => ext.settings, (s) => s.id)),
+    routes: collect(ordered, "route", (ext) => ext.routes, (r) => r.pattern),
     i18n,
   };
+}
+
+/**
+ * Flatten one contribution kind across extensions in load order. There is no
+ * namespacing, so the same key from two extensions is a hard error.
+ */
+function collect<T>(
+  extensions: ExtensionManifest[],
+  kind: string,
+  items: (ext: ExtensionManifest) => T[] | undefined,
+  key: (item: T) => string,
+): T[] {
+  const seen = new Set<string>();
+  const out: T[] = [];
+  for (const ext of extensions) {
+    for (const item of items(ext) ?? []) {
+      const id = key(item);
+      if (seen.has(id)) {
+        throw new Error(`Conflicting ${kind} id "${id}" (from extension "${ext.id}")`);
+      }
+      seen.add(id);
+      out.push(item);
+    }
+  }
+  return out;
+}
+
+const DEFAULT_ORDER = 100;
+
+/** Sort by `order` (default 100); `Array.prototype.sort` is stable, so ties keep load order. */
+function byOrder<T extends { order?: number }>(items: T[]): T[] {
+  return items.sort((a, b) => (a.order ?? DEFAULT_ORDER) - (b.order ?? DEFAULT_ORDER));
 }
 
 /** Kahn-style topological sort by `dependsOn`; throws on missing dep / cycle. */
@@ -189,16 +169,9 @@ function topoSort(
   }
 
   if (result.length !== manifests.length) {
-    const cyclic = manifests.map((m) => m.id).filter((id) => !result.includes(id));
+    const resolved = new Set(result);
+    const cyclic = manifests.map((m) => m.id).filter((id) => !resolved.has(id));
     throw new Error(`Dependency cycle among extensions: ${cyclic.join(", ")}`);
   }
   return result;
-}
-
-/** Stable sort (Array.prototype.sort is spec-stable, but be explicit + typed). */
-function stableSort<T>(items: T[], cmp: (a: T, b: T) => number): T[] {
-  return items
-    .map((value, index) => ({ value, index }))
-    .sort((a, b) => cmp(a.value, b.value) || a.index - b.index)
-    .map((entry) => entry.value);
 }

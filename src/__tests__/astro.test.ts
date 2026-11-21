@@ -211,6 +211,24 @@ describe("route injection WITH a layout", () => {
     expect(new Set(files).size).toBe(2);
   });
 
+  it("never lets two patterns that flatten to one slug overwrite each other's wrapper", () => {
+    const clash = defineExtension(
+      base({
+        id: "clash",
+        routes: [
+          { pattern: "/zeit/erfassung", entrypoint: "x/Nested.astro" },
+          { pattern: "/zeit-erfassung", entrypoint: "x/Dashed.astro" },
+          { pattern: "/Zeit_Erfassung", entrypoint: "x/Cased.astro" },
+        ],
+      }),
+    );
+    const { injected } = runSetup(frontendHost({ extensions: [clash], layout: LAYOUT }));
+    const writes = vi.mocked(writeFileSync).mock.calls.map(([f, src]) => [String(f).toLowerCase(), String(src)]);
+    expect(new Set(writes.map(([f]) => f)).size).toBe(3);
+    expect(new Set(injected.map((r) => r.entrypoint.toLowerCase())).size).toBe(3);
+    expect(writes[1]![1]).toContain('import Page from "x/Dashed.astro";');
+  });
+
   it("names the root route index rather than an empty file", () => {
     const root = defineExtension(
       base({ id: "root", routes: [{ pattern: "/", entrypoint: "x/Root.astro" }] }),

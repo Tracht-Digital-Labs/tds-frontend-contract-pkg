@@ -25,8 +25,8 @@
  * `.astro` component, which may itself embed a hydrated React island). Nav
  * entries are plain links, so they stay data-only.
  *
- * Composition happens at build time — no runtime plugin loading, no
- * `output: "server"`, one static `dist/` per product.
+ * Composition happens at build time; there is no runtime plugin loading,
+ * whatever output mode the product renders in.
  *
  * NB: we model Astro's integration shape structurally ({@link
  * AstroIntegrationLike}) instead of importing `astro`, so `frontend-contract` stays
@@ -119,20 +119,19 @@ export function frontendHost(options: FrontendHostOptions): AstroIntegrationLike
         // THAT — so the extension page renders inside the full panel chrome
         // instead of as a bare fragment with no <head>/CSS/nav. The wrappers are
         // build artifacts under the product's node_modules cache dir.
-        let routesDir: URL | undefined;
-        if (options.layout) {
-          routesDir = new URL("node_modules/.tds-frontend/routes/", config.root);
+        const { layout } = options;
+        if (layout) {
+          const routesDir = new URL("node_modules/.tds-frontend/routes/", config.root);
           mkdirSync(routesDir, { recursive: true });
-        }
-
-        for (const route of registry.routes) {
-          if (options.layout && routesDir) {
-            const slug = route.pattern.replace(/[^a-z0-9]+/gi, "_").replace(/^_+|_+$/g, "") || "index";
-            const file = new URL(`${slug}.astro`, routesDir);
+          const slugs = uniqueSlugs(registry.routes.map((r) => r.pattern));
+          registry.routes.forEach((route, i) => {
+            const file = new URL(`${slugs[i]}.astro`, routesDir);
             const title = navLabel.get(route.pattern) ?? "Panel";
-            writeFileSync(file, wrapperSource(options.layout, route.entrypoint, title));
+            writeFileSync(file, wrapperSource(layout, route.entrypoint, title));
             injectRoute({ pattern: route.pattern, entrypoint: fileURLToPath(file) });
-          } else {
+          });
+        } else {
+          for (const route of registry.routes) {
             injectRoute({ pattern: route.pattern, entrypoint: route.entrypoint });
           }
         }
@@ -146,6 +145,22 @@ export function frontendHost(options: FrontendHostOptions): AstroIntegrationLike
       },
     },
   };
+}
+
+/**
+ * One filesystem-safe wrapper name per route pattern. Distinct patterns can
+ * flatten to the same name (`/a/b` and `/a-b` both become `a_b`); a later
+ * one gets a numeric suffix so it can't overwrite the earlier wrapper.
+ */
+function uniqueSlugs(patterns: readonly string[]): string[] {
+  const taken = new Set<string>();
+  return patterns.map((pattern) => {
+    const base = pattern.replace(/[^a-z0-9]+/gi, "_").replace(/^_+|_+$/g, "") || "index";
+    let slug = base;
+    for (let n = 2; taken.has(slug.toLowerCase()); n++) slug = `${base}_${n}`;
+    taken.add(slug.toLowerCase());
+    return slug;
+  });
 }
 
 /**
@@ -182,30 +197,27 @@ interface VitePluginLike {
  * rather than two copies of the registry.
  */
 function frontendRegistryVitePlugin(registry: ComposedRegistry): VitePluginLike {
+  const internal = (slot: keyof typeof MODULES) => "\0" + MODULES[slot];
+
   /** public id → internal resolved id. */
   const resolved = new Map<string, string>();
-  for (const id of Object.values(MODULES)) resolved.set(id, "\0" + id);
-  for (const [legacyId, slot] of Object.entries(LEGACY_MODULES)) {
-    resolved.set(legacyId, "\0" + MODULES[slot]);
+  for (const slot of Object.keys(MODULES) as (keyof typeof MODULES)[]) {
+    resolved.set(MODULES[slot], internal(slot));
   }
+  for (const [legacyId, slot] of Object.entries(LEGACY_MODULES)) {
+    resolved.set(legacyId, internal(slot));
+  }
+
+  const sources = new Map<string, () => string>([
+    [internal("registry"), () => `export const registry = ${JSON.stringify(registry)};\n`],
+    [internal("widgets"), () => generateComponentModule("widgets", registry.widgets)],
+    [internal("settings"), () => generateComponentModule("settings", registry.settings)],
+  ]);
 
   return {
     name: "frontend-registry",
-    resolveId(id) {
-      return resolved.get(id);
-    },
-    load(id) {
-      if (id === "\0" + MODULES.registry) {
-        return `export const registry = ${JSON.stringify(registry)};\n`;
-      }
-      if (id === "\0" + MODULES.widgets) {
-        return generateComponentModule("widgets", registry.widgets);
-      }
-      if (id === "\0" + MODULES.settings) {
-        return generateComponentModule("settings", registry.settings);
-      }
-      return undefined;
-    },
+    resolveId: (id) => resolved.get(id),
+    load: (id) => sources.get(id)?.(),
   };
 }
 
