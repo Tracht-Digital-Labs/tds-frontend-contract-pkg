@@ -110,39 +110,21 @@ final class ModuleRegistry
     /** @return PermissionDef[] merged catalog, dependency-ordered */
     public function permissions(): array
     {
-        $out = [];
-        $seen = [];
-        foreach ($this->ordered as $module) {
-            foreach ($module->permissions() as $perm) {
-                if (isset($seen[$perm->id])) {
-                    throw new ModuleException(
-                        "Conflicting permission id \"{$perm->id}\" (from module \"{$module->id()}\")",
-                    );
-                }
-                $seen[$perm->id] = true;
-                $out[] = $perm;
-            }
-        }
-        return $out;
+        return $this->mergeUnique(
+            'permission id',
+            static fn (Module $m): array => $m->permissions(),
+            static fn (PermissionDef $p): string => $p->id,
+        );
     }
 
     /** @return SettingDef[] merged catalog, dependency-ordered */
     public function settings(): array
     {
-        $out = [];
-        $seen = [];
-        foreach ($this->ordered as $module) {
-            foreach ($module->settings() as $setting) {
-                if (isset($seen[$setting->key])) {
-                    throw new ModuleException(
-                        "Conflicting setting key \"{$setting->key}\" (from module \"{$module->id()}\")",
-                    );
-                }
-                $seen[$setting->key] = true;
-                $out[] = $setting;
-            }
-        }
-        return $out;
+        return $this->mergeUnique(
+            'setting key',
+            static fn (Module $m): array => $m->settings(),
+            static fn (SettingDef $s): string => $s->key,
+        );
     }
 
     /** Module ids in resolved dependency (load) order. @return string[] */
@@ -162,10 +144,7 @@ final class ModuleRegistry
      */
     public function notificationSources(): array
     {
-        return array_values(array_filter(
-            $this->ordered,
-            static fn (Module $m): bool => $m instanceof NotificationSource,
-        ));
+        return $this->implementing(NotificationSource::class);
     }
 
     /**
@@ -178,10 +157,7 @@ final class ModuleRegistry
      */
     public function setupStatusSources(): array
     {
-        return array_values(array_filter(
-            $this->ordered,
-            static fn (Module $m): bool => $m instanceof SetupStatusSource,
-        ));
+        return $this->implementing(SetupStatusSource::class);
     }
 
     /**
@@ -194,10 +170,7 @@ final class ModuleRegistry
      */
     public function saleListeners(): array
     {
-        return array_values(array_filter(
-            $this->ordered,
-            static fn (Module $m): bool => $m instanceof Commerce\SaleListener,
-        ));
+        return $this->implementing(Commerce\SaleListener::class);
     }
 
     /**
@@ -207,10 +180,7 @@ final class ModuleRegistry
      */
     public function referralResolvers(): array
     {
-        return array_values(array_filter(
-            $this->ordered,
-            static fn (Module $m): bool => $m instanceof Commerce\ReferralResolver,
-        ));
+        return $this->implementing(Commerce\ReferralResolver::class);
     }
 
     /**
@@ -224,10 +194,7 @@ final class ModuleRegistry
      */
     public function apiDocSources(): array
     {
-        return array_values(array_filter(
-            $this->ordered,
-            static fn (Module $m): bool => $m instanceof ApiDocSource,
-        ));
+        return $this->implementing(ApiDocSource::class);
     }
 
     /**
@@ -280,6 +247,49 @@ final class ModuleRegistry
             }
         }
         return $out;
+    }
+
+    /**
+     * Flatten one contribution kind across modules in load order; the same key
+     * from two modules is a hard error (no namespacing in one composed API).
+     *
+     * @template T
+     * @param callable(Module): T[] $items
+     * @param callable(T): string $key
+     * @return T[]
+     */
+    private function mergeUnique(string $kind, callable $items, callable $key): array
+    {
+        $out = [];
+        $seen = [];
+        foreach ($this->ordered as $module) {
+            foreach ($items($module) as $item) {
+                $id = $key($item);
+                if (isset($seen[$id])) {
+                    throw new ModuleException(
+                        "Conflicting {$kind} \"{$id}\" (from module \"{$module->id()}\")",
+                    );
+                }
+                $seen[$id] = true;
+                $out[] = $item;
+            }
+        }
+        return $out;
+    }
+
+    /**
+     * The modules that implement an optional capability, dependency-ordered.
+     *
+     * @template T of object
+     * @param class-string<T> $capability
+     * @return list<T>
+     */
+    private function implementing(string $capability): array
+    {
+        return array_values(array_filter(
+            $this->ordered,
+            static fn (Module $m): bool => $m instanceof $capability,
+        ));
     }
 
     /**
